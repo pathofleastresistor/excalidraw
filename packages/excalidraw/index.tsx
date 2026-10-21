@@ -112,6 +112,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     validateEmbeddable,
     renderEmbeddable,
     aiEnabled,
+    webMCP,
     showDeprecatedFonts,
     renderScrollbars,
     viewportStatusFrame,
@@ -255,6 +256,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
           aiEnabled={aiEnabled !== false}
+          webMCP={webMCP}
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}
           viewportStatusFrame={viewportStatusFrame}
@@ -424,6 +426,8 @@ export {
 export { reconcileElements } from "./data/reconcile";
 
 export { exportScene, exportToClipboard } from "./scene/export";
+
+export type { WebMCPOptions } from "./webmcp/types";
 
 export type {
   ExportSceneData,

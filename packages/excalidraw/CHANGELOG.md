@@ -13,6 +13,15 @@ Please add the latest change on the top under the correct section.
 
 ## Unreleased
 
+### WebMCP: `webMCP` prop (2026-10-20)
+
+Opt-in. With `<Excalidraw webMCP />` the editor registers tools through [WebMCP](https://webmachinelearning.github.io/webmcp/) (`document.modelContext`), so that AI agents in the browser can read and edit the open drawing: `get-canvas-info`, `get-elements`, `capture-image`, `add-elements`, `create-diagram`, `add-mermaid-diagram`, `connect-elements`, `update-elements`, `move-elements`, `delete-elements`, `duplicate-elements`, `align-elements`, `distribute-elements`, `group-elements`, `ungroup-elements`, `reorder-elements`, `wrap-in-frame`, `check-layout`, `select-elements`, `focus-viewport`, `configure-canvas`, `undo`, `redo`, `clear-canvas` and the library tools `list-library-items` and `insert-library-item`.
+
+- `webMCP?: boolean | WebMCPOptions` where `WebMCPOptions` is `{ exposedTo?: string[]; readOnly?: boolean }`. Off by default, and a no-op in browsers without WebMCP.
+- Tools change the canvas through the editor's own operations (one undo step each), respect view mode and `UIOptions.canvasActions`, return errors as `{ ok: false, error }` data, and accept an optional `expectedSceneVersion` to refuse edits based on a stale read.
+- The `excalidraw-app` enables it, except during live collaboration unless built with `VITE_APP_ENABLE_WEBMCP_IN_COLLAB=true`.
+- See [WebMCP](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/webmcp).
+
 ### Export API: `exportScene` (2026-10-18) [#12347](https://github.com/excalidraw/excalidraw/pull/12347)
 
 Breaking. `exportToCanvas`, `exportToBlob` and `exportToSvg` (in both `@excalidraw/excalidraw` and `@excalidraw/utils`) are replaced by a single `exportScene`, and every rendering option moved from `appState` into an explicit `config`.
