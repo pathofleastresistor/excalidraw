@@ -14,12 +14,14 @@ import {
   readString,
 } from "../input";
 import { resolveElements } from "../scene";
+import { isListedElement } from "../serialize";
 
 import type { AppState } from "../../types";
 import type { ToolDefinition } from "../common";
 
 const selectElements: ToolDefinition = {
   name: "select-elements",
+  allowInViewMode: true,
   title: "Select elements",
   description:
     "Selects elements on the canvas so the user sees them highlighted, replacing the current selection (or adding to or removing from it). An empty list clears the selection. Groups are selected whole.",
@@ -65,6 +67,7 @@ const selectElements: ToolDefinition = {
 
 const focusViewport: ToolDefinition = {
   name: "focus-viewport",
+  allowInViewMode: true,
   title: "Focus viewport",
   description:
     "Scrolls and zooms the view to show given elements, or the whole drawing when no ids are given, so the user can see them. Use after adding or changing something off-screen.",
@@ -193,7 +196,9 @@ const clearCanvas: ToolDefinition = {
   inputSchema: { type: "object", properties: {} },
   annotations: { consequentialHint: true },
   handler: async (_input, ctx) => {
-    const count = ctx.app.scene.getNonDeletedElements().length;
+    const count = ctx.app.scene
+      .getNonDeletedElements()
+      .filter(isListedElement).length;
     if (!count) {
       throw new ToolError("invalid-input", "The canvas is already empty.");
     }

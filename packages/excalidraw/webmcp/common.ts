@@ -16,6 +16,7 @@ export type ToolErrorCode =
   | "invalid-input"
   | "not-found"
   | "view-mode"
+  | "busy"
   | "scene-changed"
   | "unavailable"
   | "failed";
@@ -44,7 +45,8 @@ export type ToolDefinition = {
   description: string;
   inputSchema: WebMCPJSONSchema;
   annotations: WebMCPToolAnnotations;
-  /** only registered when a tool changes the canvas */
+  /** a tool that only moves the view or the selection works in view mode */
+  allowInViewMode?: boolean;
   handler: (
     input: Record<string, unknown>,
     ctx: ToolContext & { signal: AbortSignal },
@@ -120,13 +122,32 @@ export const toWebMCPTool = (
         signal.throwIfAborted();
 
         if (!isReadOnly) {
-          if (app.state.viewModeEnabled) {
+          if (app.state.viewModeEnabled && !definition.allowInViewMode) {
             throw new ToolError(
               "view-mode",
               "The canvas is in view mode and can't be changed. Reading is still possible.",
             );
           }
+          const { state } = app;
+          if (
+            state.editingTextElement ||
+            state.newElement ||
+            state.multiElement ||
+            state.resizingElement ||
+            state.selectedElementsAreBeingDragged
+          ) {
+            throw new ToolError(
+              "busy",
+              "The user is in the middle of editing or drawing. Wait a moment and retry.",
+            );
+          }
           const expected = input?.expectedSceneVersion;
+          if (expected != null && !Number.isInteger(expected)) {
+            throw new ToolError(
+              "invalid-input",
+              '"expectedSceneVersion" must be the integer sceneVersion from a previous result.',
+            );
+          }
           if (expected != null) {
             const current = getCurrentSceneVersion(app);
             if (expected !== current) {

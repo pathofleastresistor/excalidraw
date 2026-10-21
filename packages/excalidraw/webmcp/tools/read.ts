@@ -278,12 +278,26 @@ const captureImage: ToolDefinition = {
     const theme = readEnum(input, "theme", [THEME.LIGHT, THEME.DARK] as const);
     const transparent = readBoolean(input, "transparentBackground") ?? false;
 
+    if (ids && selectedOnly) {
+      throw new ToolError(
+        "invalid-input",
+        'Give either "ids" or "selectedOnly", not both.',
+      );
+    }
     let elements: readonly NonDeletedExcalidrawElement[] =
       app.scene.getNonDeletedElements();
-    if (ids) {
-      elements = resolveElements(ctx, ids, { includeLocked: true });
-    } else if (selectedOnly) {
-      elements = app.scene.getSelectedElements(app.state);
+    if (ids || selectedOnly) {
+      // with their labels and, for a frame, its contents
+      const targets = ids
+        ? resolveElements(ctx, ids, { includeLocked: true })
+        : app.scene.getSelectedElements(app.state);
+      elements = app.scene.getSelectedElements({
+        selectedElementIds: Object.fromEntries(
+          targets.map((t) => [t.id, true]),
+        ),
+        includeBoundTextElement: true,
+        includeElementsInFrames: true,
+      });
     }
     if (!elements.length) {
       throw new ToolError(

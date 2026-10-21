@@ -350,6 +350,12 @@ const parseElementSkeleton = (
         maxLength: MAX_TEXT_LENGTH,
         path: `${path}.text`,
       });
+      if (!text.trim()) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}.text" must not be empty.`,
+        );
+      }
       return {
         skeleton: {
           type,
@@ -451,6 +457,17 @@ const parseElementSkeleton = (
 
     case "frame": {
       const children = readIds(entry, "children", { maxItems: 200 }) ?? [];
+      const nested = children.filter(
+        (child) => refs.types.get(child) === "frame",
+      );
+      if (nested.length) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}.children" contains the frame ${nested
+            .map((c) => `"${c}"`)
+            .join(", ")}; frames can't be nested.`,
+        );
+      }
       const unknown = children.filter((child) => !refs.ids.has(child));
       if (unknown.length) {
         throw new ToolError(
@@ -665,6 +682,12 @@ const createDiagram: ToolDefinition = {
         maxLength: 500,
         path: `${path}.label`,
       });
+      if (!label.trim()) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}.label" must not be empty.`,
+        );
+      }
       const textColor = readColor(node, "textColor", `${path}.textColor`);
       return {
         id,

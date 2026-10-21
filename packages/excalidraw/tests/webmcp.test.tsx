@@ -1862,3 +1862,183 @@ describe("library tools", () => {
     ).toContain("list-library-items");
   });
 });
+
+describe("hardening", () => {
+  beforeEach(async () => {
+    await renderEditor();
+  });
+
+  it.each([
+    [
+      "add-elements",
+      { elements: [{ type: "rectangle", x: 1e300, width: 1e308 }] },
+      "elements[0].x",
+    ],
+    [
+      "add-elements",
+      { elements: [{ type: "rectangle" }], position: { x: 1e308, y: 0 } },
+      "position.x",
+    ],
+    [
+      "add-elements",
+      { elements: [{ type: "rectangle", width: 1e9 }] },
+      "elements[0].width",
+    ],
+  ])("rejects out-of-range numbers (%#)", async (name, input, parameter) => {
+    const message = expectError(
+      await callTool(name, input as any),
+      "invalid-input",
+    );
+    expect(message).toContain(parameter);
+    expect(sceneElements()).toHaveLength(0);
+  });
+
+  it("rejects out-of-range moves, positions and angles", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0 } });
+    expectError(
+      await callTool("move-elements", { ids: [a.id], dx: 1e308 }),
+      "invalid-input",
+    );
+    expectError(
+      await callTool("update-elements", { updates: [{ id: a.id, x: 1e300 }] }),
+      "invalid-input",
+    );
+    expectError(
+      await callTool("update-elements", {
+        updates: [{ id: a.id, angle: 1e12 }],
+      }),
+      "invalid-input",
+    );
+    expect(h.elements.find((e) => e.id === a.id)!.x).toBe(a.x);
+  });
+
+  it("places new content sensibly even if the drawing holds broken geometry", async () => {
+    API.setElements([
+      API.createElement({
+        type: "rectangle",
+        x: 0,
+        y: 0,
+        width: Infinity as number,
+      }),
+    ]);
+    const { created } = expectOk(
+      await callTool("add-elements", { elements: [{ type: "rectangle" }] }),
+    );
+    expect(Number.isFinite(created[0].x)).toBe(true);
+  });
+
+  it("keeps frames from containing frames, or themselves", async () => {
+    for (const elements of [
+      [{ type: "frame", id: "self", children: ["self"] }],
+      [
+        { type: "frame", id: "f1", children: ["f2"] },
+        { type: "frame", id: "f2", children: ["f1"] },
+      ],
+    ]) {
+      expect(
+        expectError(
+          await callTool("add-elements", { elements }),
+          "invalid-input",
+        ),
+      ).toContain("can't be nested");
+    }
+    expect(sceneElements()).toHaveLength(0);
+  });
+
+  it("holds writes while the user is in the middle of an interaction, not reads", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0 } });
+    act(() => h.setState({ selectedElementsAreBeingDragged: true }));
+    expect(
+      expectError(
+        await callTool("update-elements", {
+          updates: [{ id: a.id, text: "x" }],
+        }),
+        "busy",
+      ),
+    ).toContain("Wait");
+    expectOk(await callTool("get-elements"));
+    act(() => h.setState({ selectedElementsAreBeingDragged: false }));
+    expectOk(
+      await callTool("update-elements", { updates: [{ id: a.id, text: "x" }] }),
+    );
+  });
+
+  it("moves the view and the selection in view mode, but changes nothing", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0 } });
+    act(() => h.setState({ viewModeEnabled: true }));
+    expectOk(await callTool("select-elements", { ids: [a.id] }));
+    expectOk(await callTool("focus-viewport"));
+    expectError(
+      await callTool("delete-elements", { ids: [a.id] }),
+      "view-mode",
+    );
+  });
+
+  it("includes labels when capturing given or selected elements", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0, label: "Alpha" } });
+    for (const input of [{ ids: [a.id] }, { selectedOnly: true }]) {
+      await callTool("select-elements", { ids: [a.id] });
+      const { svg } = expectOk(
+        await callTool("capture-image", { format: "svg", ...input }),
+      );
+      expect(svg).toContain("Alpha");
+    }
+    expectError(
+      await callTool("capture-image", { ids: [a.id], selectedOnly: true }),
+      "invalid-input",
+    );
+  });
+
+  it("refuses font and color changes that have nothing to apply to", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0 } });
+    const stack = API.getUndoStack().length;
+    for (const patch of [{ fontSize: 30 }, { textColor: "#e03131" }]) {
+      expect(
+        expectError(
+          await callTool("update-elements", {
+            updates: [{ id: a.id, ...patch }],
+          }),
+          "invalid-input",
+        ),
+      ).toContain("no");
+    }
+    expect(API.getUndoStack()).toHaveLength(stack);
+    // with a label to apply them to, they work
+    expectOk(
+      await callTool("update-elements", {
+        updates: [{ id: a.id, text: "hi", fontSize: 30 }],
+      }),
+    );
+  });
+
+  it("rejects empty text and labels", async () => {
+    expectError(
+      await callTool("add-elements", {
+        elements: [{ type: "text", text: "  " }],
+      }),
+      "invalid-input",
+    );
+    expectError(
+      await callTool("create-diagram", { nodes: [{ id: "a", label: "" }] }),
+      "invalid-input",
+    );
+  });
+
+  it("validates expectedSceneVersion", async () => {
+    for (const expectedSceneVersion of ["x", 1.5]) {
+      expectError(
+        await callTool("undo", { expectedSceneVersion }),
+        "invalid-input",
+      );
+    }
+  });
+
+  it("counts what clear-canvas deleted like get-canvas-info does", async () => {
+    await addBoxes({
+      a: { x: 0, y: 0, label: "A" },
+      b: { x: 200, y: 0, label: "B" },
+    });
+    const { elementCount } = expectOk(await callTool("get-canvas-info"));
+    expect(expectOk(await callTool("clear-canvas")).deleted).toBe(elementCount);
+  });
+});

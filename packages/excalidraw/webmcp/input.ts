@@ -12,6 +12,9 @@ const invalid = (path: string, expectation: string): never => {
   throw new ToolError("invalid-input", `"${path}" must be ${expectation}.`);
 };
 
+/** the largest coordinate or size accepted; beyond it the editor breaks down */
+export const MAX_COORDINATE = 1e7;
+
 export const isRecord = (value: unknown): value is Input =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -91,11 +94,13 @@ export function readNumber(
   if (opts.integer && !Number.isInteger(value)) {
     return invalid(path, "an integer");
   }
-  if (opts.min != null && value < opts.min) {
-    return invalid(path, `at least ${opts.min}`);
+  const min = opts.min ?? -MAX_COORDINATE;
+  const max = opts.max ?? MAX_COORDINATE;
+  if (value < min) {
+    return invalid(path, `at least ${min}`);
   }
-  if (opts.max != null && value > opts.max) {
-    return invalid(path, `at most ${opts.max}`);
+  if (value > max) {
+    return invalid(path, `at most ${max}`);
   }
   return value;
 }

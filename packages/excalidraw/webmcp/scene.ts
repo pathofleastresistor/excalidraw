@@ -110,6 +110,10 @@ export const getFreePosition = (
     };
   }
   const [, minY, maxX] = getCommonBounds(elements);
+  if (!Number.isFinite(maxX) || !Number.isFinite(minY)) {
+    // (the drawing holds elements with broken geometry)
+    return { x: -app.state.scrollX, y: -app.state.scrollY };
+  }
   return { x: maxX + PLACEMENT_GAP, y: minY };
 };
 

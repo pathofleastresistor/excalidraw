@@ -378,6 +378,18 @@ const updateElements: ToolDefinition = {
           );
         }
       }
+      const hasLabelOrText =
+        update.text !== undefined || getTextOwner(ctx, element) !== null;
+      if (
+        (Object.keys(update.textStyle).length ||
+          update.textColor !== undefined) &&
+        !hasLabelOrText
+      ) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}": font and text color apply to text and to labels, and this ${element.type} has none. Give "text" to add a label.`,
+        );
+      }
       if (update.name !== undefined && !isFrameLikeElement(element)) {
         throw new ToolError(
           "invalid-input",
@@ -570,6 +582,7 @@ const deleteElements: ToolDefinition = {
     await runAction(ctx, actionDeleteSelected, targets, {
       notApplicable: "These elements can't be deleted right now.",
     });
+    ctx.app.selection.clear();
     return { deleted: targets.map((element) => element.id) };
   },
 };
