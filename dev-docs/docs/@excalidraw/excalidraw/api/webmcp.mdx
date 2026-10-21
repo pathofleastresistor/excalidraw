@@ -23,7 +23,7 @@ It's a progressive enhancement: browsers without WebMCP (`document.modelContext`
 | `readOnly` | `boolean` | Only register the tools that read the canvas. |
 | `exposedTo` | `string[]` | Origins the tools are exposed to, as in WebMCP's `registerTool`. Only list origins you'd share the drawing with. |
 
-A document has one set of tools. With several editors on a page, the first to register keeps the tool names, and the others log a warning.
+A document has one set of tools, registered when the editor mounts or the prop changes. With several editors on a page, the first to register keeps the tool names (the others log a warning, and don't take over if it unmounts), and tool names are not namespaced, so they can clash with a host's own WebMCP tools of the same name.
 
 ## Tools
 
@@ -82,3 +82,7 @@ Positions are in scene units (x grows to the right, y downward), angles in degre
 - **Errors are data.** WebMCP doesn't pass the reason of a rejected tool on to the agent, so a tool that can't do what's asked resolves with `{ "ok": false, "error": { "code", "message" } }`, where the message says how to correct the call. Input is validated in code, and a call with any invalid part changes nothing.
 - **Optimistic concurrency.** Every result carries a `sceneVersion`. Tools that change the canvas accept an optional `expectedSceneVersion` and refuse (`scene-changed`) if the canvas changed since, so an agent never overwrites what the user did in the meantime.
 - **Security.** Text, links, library names and images in a drawing are content that someone else may have written, so the tools that return them are annotated `untrustedContentHint`, and `clear-canvas` is `consequentialHint`. Links set by `update-elements` are limited to `http(s)`, `mailto` and `tel`. Tool metadata is static; nothing from the drawing ends up in it.
+- **The user comes first.** While the user is typing in a shape, drawing or dragging, tools that change the canvas return a `busy` error to retry shortly. Unknown parameter names are an error rather than silently ignored, and numbers are limited to ±10,000,000.
+- **Frames.** Moving or resizing an element so that it no longer overlaps its frame takes it out of the frame. To put elements into a frame use `wrap-in-frame`, or `children` in `add-elements`.
+- **Output size.** Lists are paged (25 by default) and text is truncated, but `capture-image` returns a whole image, so call it when you need to see the result rather than after every step.
+- **excalidraw.com** turns the tools off while collaborating in a live room, as collaborators' content would reach the agent and the agent's edits would reach them.

@@ -1,4 +1,4 @@
-import { randomId } from "@excalidraw/common";
+import { ROUNDNESS, randomId } from "@excalidraw/common";
 
 import {
   convertToExcalidrawElements,
@@ -265,7 +265,7 @@ const arrowProps = (kind: ArrowKind | undefined) =>
     : kind === "straight"
     ? { elbowed: false, roundness: null }
     : kind === "curved"
-    ? { elbowed: false, roundness: { type: 2 } }
+    ? { elbowed: false, roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS } }
     : {};
 
 type ParsedElement = {
@@ -944,7 +944,7 @@ const connectElements: ToolDefinition = {
     },
     required: ["from", "to"],
   },
-  annotations: {},
+  annotations: { untrustedContentHint: true },
   handler: (input, ctx) => {
     const { app } = ctx;
     const fromId = readString(input, "from", { required: true });

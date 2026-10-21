@@ -1,3 +1,5 @@
+import { flushSync } from "react-dom";
+
 import { THEME } from "@excalidraw/common";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
@@ -150,6 +152,20 @@ const configureCanvas: ToolDefinition = {
         "Give at least one of theme, backgroundColor, grid, zenMode or name.",
       );
     }
+    // the host's settings apply, as they do to the editor's own controls
+    const { canvasActions } = app.props.UIOptions;
+    if (theme && (!canvasActions.toggleTheme || app.props.theme)) {
+      throw new ToolError(
+        "invalid-input",
+        "The theme is controlled by the host application and can't be changed here.",
+      );
+    }
+    if (backgroundColor && !canvasActions.changeViewBackgroundColor) {
+      throw new ToolError(
+        "invalid-input",
+        "Changing the background color isn't allowed here.",
+      );
+    }
 
     app.api.updateScene({
       appState: appState as Pick<AppState, keyof typeof appState>,
@@ -171,9 +187,14 @@ const history = (kind: "undo" | "redo"): ToolDefinition => ({
   inputSchema: { type: "object", properties: {} },
   annotations: {},
   handler: (_input, { app }) => {
-    const before = getCurrentSceneVersion(app);
-    app.actionManager.executeAction(app.actionManager.actions[kind], "api");
-    const changed = getCurrentSceneVersion(app) !== before;
+    const snapshot = () =>
+      `${getCurrentSceneVersion(app)}|${app.state.viewBackgroundColor}`;
+    const before = snapshot();
+    // (applied now, so that the result below reflects it)
+    flushSync(() =>
+      app.actionManager.executeAction(app.actionManager.actions[kind], "api"),
+    );
+    const changed = snapshot() !== before;
     return {
       changed,
       ...(changed

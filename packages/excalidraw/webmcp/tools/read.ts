@@ -29,7 +29,7 @@ import { isListedElement, serializeElement } from "../serialize";
 
 import type { ToolDefinition } from "../common";
 
-const DEFAULT_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 200;
 const ELEMENT_TYPES = [
   "rectangle",
@@ -68,7 +68,7 @@ const getCanvasInfo: ToolDefinition = {
   description:
     "Summarizes the open drawing: number of elements per type, the area they cover, the current selection, the visible area, theme and mode. Start here to orient yourself, then use get-elements for details.",
   inputSchema: { type: "object", properties: {} },
-  annotations: { readOnlyHint: true },
+  annotations: { readOnlyHint: true, untrustedContentHint: true },
   handler: (_input, { app }) => {
     const { state } = app;
     const elements = app.scene.getNonDeletedElements().filter(isListedElement);

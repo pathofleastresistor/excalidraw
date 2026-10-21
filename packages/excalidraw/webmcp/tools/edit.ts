@@ -18,6 +18,8 @@ import {
   redrawTextBoundingBox,
   syncMovedIndices,
   updateBoundElements,
+  elementOverlapsWithFrame,
+  removeElementsFromFrame,
 } from "@excalidraw/element";
 
 import { arrayToMap } from "@excalidraw/common";
@@ -111,6 +113,33 @@ const moveElementsBy = (
   return [...stayingArrows];
 };
 
+/**
+ * Takes moved or resized elements out of the frame they no longer overlap, as
+ * dropping them with the pointer does (they'd otherwise stay clipped away).
+ */
+const refreshFrameMembership = (
+  ctx: ToolContext,
+  targets: readonly NonDeletedExcalidrawElement[],
+) => {
+  const { app } = ctx;
+  const map = app.scene.getNonDeletedElementsMap();
+  const leaving = withDependents(
+    ctx,
+    targets.filter((element) => !isFrameLikeElement(element)),
+  ).filter((element) => {
+    const frame = element.frameId ? map.get(element.frameId) : null;
+    return (
+      !!frame &&
+      isFrameLikeElement(frame) &&
+      !isFrameLikeElement(element) &&
+      !elementOverlapsWithFrame(element, frame, map)
+    );
+  });
+  if (leaving.length) {
+    removeElementsFromFrame(new Set(leaving), map);
+  }
+};
+
 const readLink = (input: Record<string, unknown>, path: string) => {
   if (input.link === null || input.link === "") {
     return null;
@@ -200,6 +229,7 @@ const addLabel = (
     y: container.y,
     text,
     containerId: container.id,
+    groupIds: container.groupIds,
     strokeColor: color ?? container.strokeColor,
     textAlign: style.textAlign ?? "center",
     verticalAlign: style.verticalAlign ?? "middle",
@@ -258,7 +288,7 @@ const updateElements: ToolDefinition = {
     },
     required: ["updates"],
   },
-  annotations: {},
+  annotations: { untrustedContentHint: true },
   handler: (input, ctx) => {
     const { app } = ctx;
     const entries = readArray(input, "updates", {
@@ -358,6 +388,18 @@ const updateElements: ToolDefinition = {
           `"${path}": the size of a ${element.type} follows its content. Change fontSize for text, or points by re-creating lines and arrows.`,
         );
       }
+      if (update.angle !== undefined && isArrowElement(element)) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}.angle": arrows follow their points and can't be rotated.`,
+        );
+      }
+      if (update.text !== undefined && !update.text.trim()) {
+        throw new ToolError(
+          "invalid-input",
+          `"${path}.text" must not be empty. To remove an element or its label, use delete-elements.`,
+        );
+      }
       if (update.text !== undefined) {
         if (isFrameLikeElement(element)) {
           throw new ToolError(
@@ -428,7 +470,7 @@ const updateElements: ToolDefinition = {
       if (update.height !== undefined) {
         props.height = update.height;
       }
-      if (update.angle !== undefined && !isArrowElement(element)) {
+      if (update.angle !== undefined) {
         props.angle = (update.angle * Math.PI) / 180;
       }
       if (update.name !== undefined) {
@@ -498,6 +540,18 @@ const updateElements: ToolDefinition = {
       }
     }
 
+    refreshFrameMembership(
+      ctx,
+      parsed
+        .filter(
+          (u) =>
+            u.x !== undefined ||
+            u.y !== undefined ||
+            u.width !== undefined ||
+            u.height !== undefined,
+        )
+        .map((u) => byId.get(u.id)!),
+    );
     app.scene.triggerUpdate();
 
     const map = app.scene.getNonDeletedElementsMap();
@@ -533,7 +587,7 @@ const moveElements: ToolDefinition = {
     },
     required: ["ids"],
   },
-  annotations: {},
+  annotations: { untrustedContentHint: true },
   handler: (input, ctx) => {
     const { app } = ctx;
     const ids = readIds(input, "ids", { required: true })!;
@@ -546,6 +600,7 @@ const moveElements: ToolDefinition = {
 
     app.store.scheduleCapture();
     const stayed = moveElementsBy(ctx, targets, dx, dy);
+    refreshFrameMembership(ctx, targets);
     app.scene.triggerUpdate();
 
     if (readBoolean(input, "reveal")) {
@@ -605,7 +660,7 @@ const duplicateElementsTool: ToolDefinition = {
     },
     required: ["ids"],
   },
-  annotations: {},
+  annotations: { untrustedContentHint: true },
   handler: (input, ctx) => {
     const { app } = ctx;
     const ids = readIds(input, "ids", { required: true })!;

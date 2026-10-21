@@ -113,7 +113,7 @@ export const serializeElement = (
     }
   }
   if (element.link) {
-    out.link = element.link;
+    out.link = truncate(element.link);
   }
   return out;
 };

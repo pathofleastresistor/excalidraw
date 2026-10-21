@@ -946,7 +946,9 @@ const ExcalidrawWrapper = () => {
       })}
     >
       <Excalidraw
-        webMCP
+        // not in live collaboration rooms: collaborators' content would reach
+        // the user's agent, and the agent's edits would reach them
+        webMCP={!isCollaborating}
         viewportStatusFrame={viewportStatusFrame}
         userToFollow={userToFollow}
         onChange={onChange}

@@ -2042,3 +2042,132 @@ describe("hardening", () => {
     expect(expectOk(await callTool("clear-canvas")).deleted).toBe(elementCount);
   });
 });
+
+describe("review follow-ups", () => {
+  beforeEach(async () => {
+    await renderEditor();
+  });
+
+  it("rejects unknown parameters instead of ignoring typos", async () => {
+    expect(
+      expectError(
+        await callTool("add-elements", {
+          elements: [{ type: "rectangle", colour: "red" }],
+        }),
+        "invalid-input",
+      ),
+    ).toContain('"elements[0].colour"');
+    expect(
+      expectError(
+        await callTool("get-elements", { bogus: 1 }),
+        "invalid-input",
+      ),
+    ).toContain('"bogus"');
+    expect(sceneElements()).toHaveLength(0);
+  });
+
+  it("takes elements moved out of a frame out of it", async () => {
+    const [a] = await addBoxes({ a: { x: 0, y: 0, label: "A" } });
+    const { frame } = expectOk(
+      await callTool("wrap-in-frame", { ids: [a.id] }),
+    );
+    const frameOf = (id: string) =>
+      h.elements.find((e) => e.id === id)!.frameId;
+    expect(frameOf(a.id)).toBe(frame.id);
+
+    // a small move keeps it
+    expectOk(await callTool("move-elements", { ids: [a.id], dx: 5 }));
+    expect(frameOf(a.id)).toBe(frame.id);
+
+    expectOk(await callTool("move-elements", { ids: [a.id], dx: 3000 }));
+    expect(frameOf(a.id)).toBeNull();
+    // and so is its label
+    expect(sceneElements().find((e) => e.type === "text")!.frameId).toBeNull();
+  });
+
+  it("won't blank a label or text, or rotate an arrow", async () => {
+    const [a, b] = await addBoxes({
+      a: { x: 0, y: 0, label: "A" },
+      b: { x: 300, y: 0 },
+    });
+    expect(
+      expectError(
+        await callTool("update-elements", {
+          updates: [{ id: a.id, text: "" }],
+        }),
+        "invalid-input",
+      ),
+    ).toContain("delete-elements");
+    const { arrow } = expectOk(
+      await callTool("connect-elements", { from: a.id, to: b.id }),
+    );
+    expectError(
+      await callTool("update-elements", {
+        updates: [{ id: arrow.id, angle: 30 }],
+      }),
+      "invalid-input",
+    );
+  });
+
+  it("gives a new label its container's groups", async () => {
+    const [a, b] = await addBoxes({ a: { x: 0, y: 0 }, b: { x: 300, y: 0 } });
+    const { groupId } = expectOk(
+      await callTool("group-elements", { ids: [a.id, b.id] }),
+    );
+    await callTool("update-elements", {
+      updates: [{ id: a.id, text: "label" }],
+    });
+    const label = sceneElements().find((e) => e.type === "text")!;
+    expect(label.groupIds).toEqual([groupId]);
+  });
+
+  it("reports an undo that only changed the background", async () => {
+    await callTool("configure-canvas", { backgroundColor: "#ffc9c9" });
+    const result = expectOk(await callTool("undo"));
+    expect(result.changed).toBe(true);
+    expect(h.state.viewBackgroundColor).not.toBe("#ffc9c9");
+  });
+
+  it("flags the tools that return existing user content as untrusted", () => {
+    for (const name of [
+      "get-canvas-info",
+      "update-elements",
+      "move-elements",
+      "duplicate-elements",
+      "connect-elements",
+    ]) {
+      expect(
+        ALL_TOOLS.find((t) => t.name === name)!.annotations
+          .untrustedContentHint,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("configure-canvas and host settings", () => {
+  it("honors the host's UIOptions and controlled theme", async () => {
+    await render(
+      <Excalidraw
+        webMCP
+        theme="dark"
+        UIOptions={{
+          canvasActions: {
+            toggleTheme: false,
+            changeViewBackgroundColor: false,
+          },
+        }}
+      />,
+    );
+    await act(async () => {});
+    expectError(
+      await callTool("configure-canvas", { theme: "light" }),
+      "invalid-input",
+    );
+    expectError(
+      await callTool("configure-canvas", { backgroundColor: "#00ff00" }),
+      "invalid-input",
+    );
+    expect(h.state.theme).toBe("dark");
+    expectOk(await callTool("configure-canvas", { grid: true }));
+  });
+});

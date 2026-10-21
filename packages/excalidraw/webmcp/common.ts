@@ -72,6 +72,49 @@ export const EXPECTED_SCENE_VERSION_PROPERTY: Record<string, WebMCPJSONSchema> =
 export const getCurrentSceneVersion = (app: App) =>
   getSceneVersion(app.scene.getElementsIncludingDeleted());
 
+/**
+ * Typos in parameter names would otherwise be dropped silently and draw
+ * something the agent didn't ask for, so unknown keys are an error.
+ */
+const findUnknownKey = (
+  value: unknown,
+  schema: WebMCPJSONSchema,
+  path: string,
+): string | null => {
+  if (Array.isArray(value)) {
+    if (schema.items) {
+      for (let index = 0; index < value.length; index++) {
+        const found = findUnknownKey(
+          value[index],
+          schema.items,
+          `${path}[${index}]`,
+        );
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }
+  if (typeof value !== "object" || value === null || !schema.properties) {
+    return null;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    const childSchema = schema.properties[key];
+    const childPath = path ? `${path}.${key}` : key;
+    if (!childSchema) {
+      return `Unknown parameter "${childPath}". Known parameters: ${Object.keys(
+        schema.properties,
+      ).join(", ")}.`;
+    }
+    const found = findUnknownKey(child, childSchema, childPath);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+
 const toError = (error: unknown): ToolResult => {
   if (error instanceof ToolError) {
     return { ok: false, error: { code: error.code, message: error.message } };
@@ -98,20 +141,21 @@ export const toWebMCPTool = (
   getApp: () => App | null,
 ): WebMCPTool => {
   const isReadOnly = definition.annotations.readOnlyHint === true;
+  const inputSchema: WebMCPJSONSchema = isReadOnly
+    ? definition.inputSchema
+    : {
+        ...definition.inputSchema,
+        properties: {
+          ...definition.inputSchema.properties,
+          ...EXPECTED_SCENE_VERSION_PROPERTY,
+        },
+      };
 
   return {
     name: definition.name,
     title: definition.title,
     description: definition.description,
-    inputSchema: isReadOnly
-      ? definition.inputSchema
-      : {
-          ...definition.inputSchema,
-          properties: {
-            ...definition.inputSchema.properties,
-            ...EXPECTED_SCENE_VERSION_PROPERTY,
-          },
-        },
+    inputSchema,
     annotations: definition.annotations,
     execute: async (input, { signal }) => {
       try {
@@ -157,6 +201,11 @@ export const toWebMCPTool = (
               );
             }
           }
+        }
+
+        const unknown = findUnknownKey(input ?? {}, inputSchema, "");
+        if (unknown) {
+          throw new ToolError("invalid-input", unknown);
         }
 
         const output = await definition.handler(input ?? {}, { app, signal });
