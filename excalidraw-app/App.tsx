@@ -946,6 +946,7 @@ const ExcalidrawWrapper = () => {
       })}
     >
       <Excalidraw
+        webMCP
         viewportStatusFrame={viewportStatusFrame}
         userToFollow={userToFollow}
         onChange={onChange}

@@ -87,6 +87,7 @@ const sidebars = {
             },
             "@excalidraw/excalidraw/api/constants",
             "@excalidraw/excalidraw/api/excalidraw-element-skeleton",
+            "@excalidraw/excalidraw/api/webmcp",
           ],
         },
         "@excalidraw/excalidraw/faq",

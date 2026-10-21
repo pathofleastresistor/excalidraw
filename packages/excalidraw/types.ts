@@ -57,6 +57,8 @@ import type {
 } from "@excalidraw/element";
 import type { GlobalPoint } from "@excalidraw/math";
 
+import type { WebMCPOptions } from "./webmcp/types";
+
 import type { Action } from "./actions/types";
 import type { Spreadsheet } from "./charts";
 import type { ClipboardData } from "./clipboard";
@@ -1070,6 +1072,14 @@ export interface ExcalidrawProps {
     appState: AppState,
   ) => JSX.Element | null;
   aiEnabled?: boolean;
+  /**
+   * Exposes the canvas to AI agents running in the browser as WebMCP tools
+   * (https://webmachinelearning.github.io/webmcp/), when the browser
+   * supports WebMCP. Pass `true` for all tools, or options to restrict them.
+   *
+   * @default false
+   */
+  webMCP?: boolean | WebMCPOptions;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;
   viewportStatusFrame?: ViewportStatusFrame | null;

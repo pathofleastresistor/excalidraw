@@ -19,6 +19,7 @@ All `props` are _optional_.
 | [`renderTopRightUI`](/docs/@excalidraw/excalidraw/api/props/render-props#rendertoprightui) | `function` | \_ | Render function that renders custom UI in top right corner |
 | [`renderCustomStats`](/docs/@excalidraw/excalidraw/api/props/render-props#rendercustomstats) | `function` | \_ | Render function that can be used to render custom stats on the stats dialog. |
 | [`viewModeEnabled`](#viewmodeenabled) | `boolean` | \_ | This indicates if the app is in `view` mode. |
+| [`webMCP`](#webmcp) | `boolean` &#124; `WebMCPOptions` | `false` | Exposes the canvas to AI agents running in the browser as [WebMCP](/docs/@excalidraw/excalidraw/api/webmcp) tools. |
 | [`zenModeEnabled`](#zenmodeenabled) | `boolean` | \_ | This indicates if the `zen` mode is enabled |
 | [`gridModeEnabled`](#gridmodeenabled) | `boolean` | \_ | This indicates if the `grid` mode is enabled |
 | [`libraryReturnUrl`](#libraryreturnurl) | `string` | \_ | What URL should [libraries.excalidraw.com](https://libraries.excalidraw.com) be installed to |
@@ -205,6 +206,25 @@ import { defaultLang, languages } from "@excalidraw/excalidraw";
 ### viewModeEnabled
 
 This prop indicates whether the app is in `view mode`. When supplied, the value takes precedence over _intialData.appState.viewModeEnabled_, the `view mode` will be fully controlled by the host app, and users won't be able to toggle it from within the app.
+
+### webMCP
+
+| Type | Default |
+| --- | --- |
+| `boolean` &#124; `WebMCPOptions` | `false` |
+
+Makes the canvas available to AI agents running in the browser, as [WebMCP](https://webmachinelearning.github.io/webmcp/) tools that read and edit the drawing. It does nothing in browsers without WebMCP. Pass `true` for all tools, or an object to restrict them:
+
+```ts
+type WebMCPOptions = {
+  /** origins the tools are exposed to, as in `registerTool`'s `exposedTo` */
+  exposedTo?: string[];
+  /** only the tools that read the canvas, not the ones that change it */
+  readOnly?: boolean;
+};
+```
+
+See [WebMCP](/docs/@excalidraw/excalidraw/api/webmcp) for the tools and what they can do.
 
 ### zenModeEnabled
 

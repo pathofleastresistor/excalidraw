@@ -1,0 +1,84 @@
+# WebMCP
+
+[WebMCP](https://webmachinelearning.github.io/webmcp/) lets a web page offer its functionality to AI agents in the browser as structured _tools_, instead of having the agent click around the UI. With the [`webMCP`](/docs/@excalidraw/excalidraw/api/props/props#webmcp) prop, Excalidraw offers tools to read the open drawing, draw and edit on it, and look at the result, on the canvas the user already has open: the agent sees what the user drew, and the user keeps drawing alongside the agent.
+
+```jsx
+<Excalidraw webMCP />
+```
+
+It's a progressive enhancement: browsers without WebMCP (`document.modelContext`) are unaffected. Tools are registered once the editor is mounted and withdrawn when it unmounts or the prop is turned off.
+
+:::note WebMCP is an early preview. To try it in Chrome, enable `chrome://flags/#enable-webmcp-testing`, and use an agent that supports it, such as the [Model Context Tool Inspector](https://developer.chrome.com/docs/ai/webmcp) extension. :::
+
+## Options
+
+```jsx
+<Excalidraw
+  webMCP={{ readOnly: true, exposedTo: ["https://agent.example.com"] }}
+/>
+```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `readOnly` | `boolean` | Only register the tools that read the canvas. |
+| `exposedTo` | `string[]` | Origins the tools are exposed to, as in WebMCP's `registerTool`. Only list origins you'd share the drawing with. |
+
+A document has one set of tools. With several editors on a page, the first to register keeps the tool names, and the others log a warning.
+
+## Tools
+
+Positions are in scene units (x grows to the right, y downward), angles in degrees. Tools that change the canvas make **one undo step**, so the user can undo an agent's edit with <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Z</kbd> or with the `undo` tool.
+
+### Read
+
+| Tool |  |
+| --- | --- |
+| `get-canvas-info` | Counts per element type, the area covered, the selection, the visible area, theme and mode. |
+| `get-elements` | Elements with position, size and text, filtered by ids, types, selection, frame or text, and paged. |
+| `capture-image` | The drawing, the selection or given elements as a PNG data URL or SVG, so the agent can see its work. |
+| `list-library-items` | The user's saved library items. |
+
+### Draw
+
+| Tool |  |
+| --- | --- |
+| `add-elements` | Shapes, text, lines, arrows and frames. Coordinates are relative to each other and the group is placed in free space, or at `position`. Arrows can run between shapes of the same call (`from`/`to`) and frames can contain them (`children`). |
+| `create-diagram` | A flowchart or graph from nodes and edges, laid out automatically (top-down or left-to-right), with arrows bound to the nodes. |
+| `add-mermaid-diagram` | A diagram from Mermaid syntax, as editable elements. |
+| `connect-elements` | A bound straight, curved or elbow arrow between two elements already on the canvas. |
+| `insert-library-item` | A saved library item. |
+
+### Edit
+
+| Tool |  |
+| --- | --- |
+| `update-elements` | Position, size, rotation, colors, line style, text or label, font, frame name, link and lock of existing elements. Only the given fields change. |
+| `move-elements` | Shifts elements by an offset; labels and frame contents go along and bound arrows follow. |
+| `delete-elements` | Removes elements with their labels. |
+| `duplicate-elements` | Copies elements (with labels, groups and the arrows between them), optionally several in a row. |
+
+### Arrange
+
+| Tool |  |
+| --- | --- |
+| `align-elements`, `distribute-elements` | As the toolbar's align and distribute. |
+| `group-elements`, `ungroup-elements` |  |
+| `reorder-elements` | Bring to front/back, forward, backward. |
+| `wrap-in-frame` | A new, optionally titled frame around elements. |
+
+### View and history
+
+| Tool |  |
+| --- | --- |
+| `select-elements` | Selects, adds to or removes from the selection, so the user sees what the agent refers to. |
+| `focus-viewport` | Scrolls and zooms to elements, or to the whole drawing. |
+| `configure-canvas` | Theme, background color, grid, zen mode and the drawing's name. |
+| `undo`, `redo` | Step through the history. |
+| `clear-canvas` | Deletes everything (undoable). Marked `consequentialHint`. |
+
+## How the tools behave
+
+- **Same as the editor.** Tools use the editor's own operations, so arrows bind, labels follow their shapes, frames hold their contents, and the host's settings apply: for example `clear-canvas` is refused where [`UIOptions.canvasActions.clearCanvas`](/docs/@excalidraw/excalidraw/api/props/ui-options) is off, and nothing can be changed in view mode (reading still works). Changes sync to collaborators like any other edit.
+- **Errors are data.** WebMCP doesn't pass the reason of a rejected tool on to the agent, so a tool that can't do what's asked resolves with `{ "ok": false, "error": { "code", "message" } }`, where the message says how to correct the call. Input is validated in code, and a call with any invalid part changes nothing.
+- **Optimistic concurrency.** Every result carries a `sceneVersion`. Tools that change the canvas accept an optional `expectedSceneVersion` and refuse (`scene-changed`) if the canvas changed since, so an agent never overwrites what the user did in the meantime.
+- **Security.** Text, links, library names and images in a drawing are content that someone else may have written, so the tools that return them are annotated `untrustedContentHint`, and `clear-canvas` is `consequentialHint`. Links set by `update-elements` are limited to `http(s)`, `mailto` and `tel`. Tool metadata is static; nothing from the drawing ends up in it.

@@ -370,6 +370,8 @@ import {
   resolveColorTarget,
 } from "../actions/colorTargets";
 
+import { AppWebMCP } from "../webmcp/AppWebMCP";
+
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
   convertElementTypePopupAtom,
@@ -378,6 +380,7 @@ import ConvertElementTypePopup, {
 
 import { activeConfirmDialogAtom } from "./ActiveConfirmDialog";
 import { AppArrowText } from "./App.arrowText";
+
 import { AppClipboard } from "./App.clipboard";
 import { AppText } from "./App.text";
 import { AppTextTool } from "./App.textTool";
@@ -685,6 +688,7 @@ class App extends React.Component<AppProps, AppState> {
     isDraggingScrollBar: () => isDraggingScrollBar,
   });
   public textTool: AppTextTool = new AppTextTool(this);
+  public webMCP: AppWebMCP = new AppWebMCP(this);
   public clipboard: AppClipboard = new AppClipboard(this, {
     getContainer: () => this.excalidrawContainerRef.current,
   });
@@ -3899,6 +3903,7 @@ class App extends React.Component<AppProps, AppState> {
     this.editorLifecycleEvents.emit("editor:mount", mountPayload);
     this.props.onMount?.(mountPayload);
     this.props.onExcalidrawAPI?.(this.api);
+    this.webMCP.sync();
   }
 
   public componentWillUnmount() {
@@ -3921,6 +3926,7 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
 
+    this.webMCP.destroy();
     this.ownerWindow.clearTimeout(this.zenModeTransitionTimer);
     this.unmarkZenModeTransition();
     this.editorLifecycleEvents.emit("editor:unmount");
@@ -4291,6 +4297,9 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    if (prevProps.webMCP !== this.props.webMCP) {
+      this.webMCP.sync();
+    }
     const renderOverridesUpdatePending = this.renderOverridesUpdatePending;
     this.renderOverridesUpdatePending = false;
     // Only a requested visual update can skip the document pipeline. Real
