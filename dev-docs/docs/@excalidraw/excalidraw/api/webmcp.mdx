@@ -37,12 +37,13 @@ Positions are in scene units (x grows to the right, y downward), angles in degre
 | `get-elements` | Elements with position, size and text, filtered by ids, types, selection, frame or text, and paged. |
 | `capture-image` | The drawing, the selection or given elements as a PNG data URL or SVG, so the agent can see its work. |
 | `list-library-items` | The user's saved library items. |
+| `check-layout` | Lints the drawing without seeing it: overlapping shapes, arrow ends inside a shape or hanging in the air, elements outside the visible area. Returns ids to fix. |
 
 ### Draw
 
 | Tool |  |
 | --- | --- |
-| `add-elements` | Shapes, text, lines, arrows and frames. Coordinates are relative to each other and the group is placed in free space, or at `position`. Arrows can run between shapes of the same call (`from`/`to`) and frames can contain them (`children`). |
+| `add-elements` | Shapes, text, lines, arrows and frames. Coordinates are relative to each other and the group's top-left corner is placed in free space, or at `position`; pass `absolute` to use exact scene coordinates. Arrows can run between shapes of the same call (`from`/`to`) and frames can contain them (`children`). |
 | `create-diagram` | A flowchart or graph from nodes and edges, laid out automatically (top-down or left-to-right), with arrows bound to the nodes. |
 | `add-mermaid-diagram` | A diagram from Mermaid syntax, as editable elements. |
 | `connect-elements` | A bound straight, curved or elbow arrow between two elements already on the canvas. |
@@ -86,3 +87,4 @@ Positions are in scene units (x grows to the right, y downward), angles in degre
 - **Frames.** Moving or resizing an element so that it no longer overlaps its frame takes it out of the frame. To put elements into a frame use `wrap-in-frame`, or `children` in `add-elements`.
 - **Output size.** Lists are paged (25 by default) and text is truncated, but `capture-image` returns a whole image, so call it when you need to see the result rather than after every step.
 - **excalidraw.com** turns the tools off while collaborating in a live room, as collaborators' content would reach the agent and the agent's edits would reach them. A build can keep them on by setting `VITE_APP_ENABLE_WEBMCP_IN_COLLAB=true`.
+- **Arrows between close shapes.** The editor can't attach an arrow between elements closer than about 32 px, and snaps its end to the middle of the target. Tools that join elements draw a plain arrow between their facing edges in that case and say so in `warnings`. Leave 32 px or more between elements to attach arrows.

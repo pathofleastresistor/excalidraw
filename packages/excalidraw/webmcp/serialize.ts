@@ -75,6 +75,11 @@ export const serializeElement = (
     out.groupIds = element.groupIds;
   }
   if (isArrowElement(element)) {
+    // where the arrow actually runs, to check that it joins what it should
+    const first = element.points[0];
+    const last = element.points[element.points.length - 1];
+    out.start = [round(element.x + first[0]), round(element.y + first[1])];
+    out.end = [round(element.x + last[0]), round(element.y + last[1])];
     if (element.startBinding) {
       out.from = element.startBinding.elementId;
     }

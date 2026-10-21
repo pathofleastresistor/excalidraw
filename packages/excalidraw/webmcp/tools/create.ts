@@ -35,7 +35,9 @@ import {
   bindConnectors,
   commitScene,
   getConnectorGeometry,
+  getFacingGap,
   getFreePosition,
+  MIN_ATTACH_GAP,
   resolveElements,
   revealElements,
 } from "../scene";
@@ -105,20 +107,53 @@ const readPosition = (input: Record<string, unknown>) => {
 /** an arrow to bind between two of the elements being added */
 type Connector = { arrowId: string; fromId: string; toId: string };
 
-/** gives the arrows the geometry that runs between their elements */
+/**
+ * Gives the arrows the geometry that runs between their elements. Elements
+ * too close for an attached arrow get a plain arrow between their facing
+ * edges instead, which is reported back rather than left to snap to the
+ * middle of its target.
+ * @returns the arrows to bind, and those that couldn't be attached
+ */
 const aimConnectors = (
   created: readonly ExcalidrawElement[],
   connectors: readonly Connector[],
 ) => {
   const byId = new Map(created.map((element) => [element.id, element]));
-  for (const { arrowId, fromId, toId } of connectors) {
-    const arrow = byId.get(arrowId)!;
-    Object.assign(
-      arrow,
-      getConnectorGeometry(arrow, byId.get(fromId)!, byId.get(toId)!),
-    );
+  const attach: Connector[] = [];
+  const unattached: { arrowId: string; gap: number }[] = [];
+  for (const connector of connectors) {
+    const arrow = byId.get(connector.arrowId)!;
+    const from = byId.get(connector.fromId)!;
+    const to = byId.get(connector.toId)!;
+    const gap = getFacingGap(from, to);
+    if (gap < MIN_ATTACH_GAP) {
+      Object.assign(
+        arrow,
+        getConnectorGeometry(arrow, from, to, { sideToSide: true }),
+      );
+      unattached.push({ arrowId: arrow.id, gap: Math.round(gap) });
+    } else {
+      Object.assign(arrow, getConnectorGeometry(arrow, from, to));
+      attach.push(connector);
+    }
   }
+  return { attach, unattached };
 };
+
+const unattachedWarnings = (
+  unattached: readonly { arrowId: string; gap: number }[],
+) =>
+  unattached.length
+    ? {
+        warnings: [
+          `${
+            unattached.length
+          } arrow(s) join elements closer than ${MIN_ATTACH_GAP}px apart. They are drawn between the facing edges but not attached, so they won't follow if the elements move. Leave at least ${MIN_ATTACH_GAP}px between elements to attach arrows. Arrow ids: ${unattached
+            .map((u) => `${u.arrowId} (gap ${u.gap}px)`)
+            .join(", ")}.`,
+        ],
+      }
+    : {};
 
 /**
  * Adds freshly created elements to the canvas, as one undoable step. The
@@ -138,8 +173,11 @@ const insertElements = (
   const reveal = readBoolean(input, "reveal") ?? true;
 
   const [minX, minY, maxX, maxY] = getCommonBounds(created);
-  const target =
-    readPosition(input) ?? getFreePosition(ctx, maxX - minX, maxY - minY);
+  // `absolute`: the x/y given are exact scene coordinates, nothing is moved
+  const absolute = readBoolean(input, "absolute") ?? false;
+  const target = absolute
+    ? { x: minX, y: minY }
+    : readPosition(input) ?? getFreePosition(ctx, maxX - minX, maxY - minY);
   const dx = target.x - minX;
   const dy = target.y - minY;
 
@@ -506,7 +544,7 @@ const addElements: ToolDefinition = {
   name: "add-elements",
   title: "Add elements",
   description:
-    "Draws shapes, text, arrows, lines and frames. Give coordinates relative to each other (start at 0,0); the group lands in free space, or at `position`. Shapes take a label; arrows can run between shapes via from/to ids defined in the same call. One undo step.",
+    "Draws shapes, text, arrows, lines and frames. x/y are relative to each other: the group's top-left corner goes to `position`, or free space; set absolute to use exact scene coordinates. Unset styles follow the user's settings. Arrows between shapes use from/to ids of this call (keep 32px+ between them to attach). Returns ids: your names to real ids. One undo step.",
   inputSchema: {
     type: "object",
     properties: {
@@ -514,6 +552,10 @@ const addElements: ToolDefinition = {
         type: "array",
         items: ELEMENT_SCHEMA,
         description: `up to ${MAX_ELEMENTS_PER_CALL} elements`,
+      },
+      absolute: {
+        type: "boolean",
+        description: "use x/y as exact scene coordinates; position is ignored",
       },
       position: POSITION_SCHEMA,
       select: SELECT_SCHEMA,
@@ -560,12 +602,14 @@ const addElements: ToolDefinition = {
         ? [{ arrowId: skeleton.id!, fromId: connect.from, toId: connect.to }]
         : [],
     );
-    aimConnectors(created, connectors);
+    const { attach, unattached } = aimConnectors(created, connectors);
 
-    const { live, map } = insertElements(ctx, created, input, connectors);
+    const { live, map } = insertElements(ctx, created, input, attach);
     return {
-      created: summarize(live, map),
+      // your names for the elements, and their ids (use those to change them)
       ...(ids.size ? { ids: Object.fromEntries(ids) } : {}),
+      created: summarize(live, map),
+      ...unattachedWarnings(unattached),
     };
   },
 };
@@ -833,7 +877,7 @@ const createDiagram: ToolDefinition = {
       fromId: nodeIds.get(edge.from)!,
       toId: nodeIds.get(edge.to)!,
     }));
-    aimConnectors(created, connectors);
+    const { attach, unattached } = aimConnectors(created, connectors);
 
     if (title) {
       const [minX, minY, maxX] = getCommonBounds(created);
@@ -858,10 +902,11 @@ const createDiagram: ToolDefinition = {
       );
     }
 
-    const { live, map } = insertElements(ctx, created, input, connectors);
+    const { live, map } = insertElements(ctx, created, input, attach);
     return {
       nodeIds: Object.fromEntries(nodeIds),
       created: summarize(live, map),
+      ...unattachedWarnings(unattached),
     };
   },
 };
@@ -996,15 +1041,18 @@ const connectElements: ToolDefinition = {
       renderEnvironment: app.renderEnvironment,
     });
     const connector = { arrowId: skeleton.id!, fromId, toId };
-    const arrow = created.find((element) => element.id === connector.arrowId)!;
-    Object.assign(arrow, getConnectorGeometry(arrow, from, to));
+    // (the elements it joins are already in the scene, so they're passed alongside)
+    const { attach, unattached } = aimConnectors(
+      [...created, from, to],
+      [connector],
+    );
 
     // bound against the scene, as dragging an arrow's end onto a shape does
     app.scene.replaceAllElements([
       ...app.scene.getElementsIncludingDeleted(),
       ...created,
     ]);
-    bindConnectors(ctx, [connector]);
+    bindConnectors(ctx, attach);
     commitScene(ctx, app.scene.getElementsIncludingDeleted(), {
       selectIds:
         readBoolean(input, "select") ?? true ? [connector.arrowId] : undefined,
@@ -1013,6 +1061,7 @@ const connectElements: ToolDefinition = {
     const map = app.scene.getNonDeletedElementsMap();
     return {
       arrow: serializeElement(map.get(connector.arrowId)!, map, "summary"),
+      ...unattachedWarnings(unattached),
     };
   },
 };

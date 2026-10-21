@@ -168,16 +168,46 @@ export const revealElements = (
 };
 
 /**
+ * The closest two elements can be, edge to edge, and still hold an attached
+ * arrow. The editor won't make an attached arrow shorter than
+ * `MINIMUM_ARROW_SIZE` and leaves a binding gap at each end; closer than
+ * that it snaps the end to the middle of the target instead.
+ */
+export const MIN_ATTACH_GAP = 32;
+
+/** whether the arrow between the elements runs along x (they sit side by side) */
+const runsHorizontally = (from: ExcalidrawElement, to: ExcalidrawElement) => {
+  const dx = to.x + to.width / 2 - (from.x + from.width / 2);
+  const dy = to.y + to.height / 2 - (from.y + from.height / 2);
+  const sideGap = Math.max(
+    to.x - (from.x + from.width),
+    from.x - (to.x + to.width),
+  );
+  // leave sideways when the elements are clearly side by side (a gap
+  // between them on the x axis), as flowcharts do, else by the larger offset
+  return sideGap > 24 || Math.abs(dx) >= Math.abs(dy);
+};
+
+/** the free space between the elements' facing edges (negative: they overlap) */
+export const getFacingGap = (from: ExcalidrawElement, to: ExcalidrawElement) =>
+  runsHorizontally(from, to)
+    ? Math.max(to.x - (from.x + from.width), from.x - (to.x + to.width))
+    : Math.max(to.y - (from.y + from.height), from.y - (to.y + to.height));
+
+/**
  * The arrow geometry to start from before binding. Binding snaps a straight
  * arrow's ends to the outlines of the elements along its line, so it can run
  * centre to centre. An elbow arrow keeps its ends where they are, so it
  * starts and ends at the middle of the facing edges, as the editor's
- * flowchart creation places its arrows.
+ * flowchart creation places its arrows. `sideToSide` does the same for a
+ * straight arrow that won't be attached (the middle of a facing edge is on
+ * the outline of a rectangle, diamond or ellipse alike).
  */
 export const getConnectorGeometry = (
   arrow: ExcalidrawElement,
   from: ExcalidrawElement,
   to: ExcalidrawElement,
+  opts: { sideToSide?: boolean } = {},
 ) => {
   const fromCenter = {
     x: from.x + from.width / 2,
@@ -189,14 +219,8 @@ export const getConnectorGeometry = (
 
   let start = fromCenter;
   let end = toCenter;
-  if (isElbowArrow(arrow)) {
-    // leave sideways when the elements are clearly side by side (a gap
-    // between them on the x axis), as flowcharts do, else by the larger offset
-    const sideGap = Math.max(
-      to.x - (from.x + from.width),
-      from.x - (to.x + to.width),
-    );
-    if (sideGap > 24 || Math.abs(dx) >= Math.abs(dy)) {
+  if (isElbowArrow(arrow) || opts.sideToSide) {
+    if (runsHorizontally(from, to)) {
       start = { x: dx >= 0 ? from.x + from.width : from.x, y: fromCenter.y };
       end = { x: dx >= 0 ? to.x : to.x + to.width, y: toCenter.y };
     } else {

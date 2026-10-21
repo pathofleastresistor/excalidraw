@@ -216,6 +216,7 @@ describe("WebMCP tool definitions follow the guidelines", () => {
     expect(readOnly.sort()).toEqual(
       [
         "capture-image",
+        "check-layout",
         "get-canvas-info",
         "get-elements",
         "list-library-items",
@@ -2186,5 +2187,273 @@ describe("configure-canvas and host settings", () => {
     );
     expect(h.state.theme).toBe("dark");
     expectOk(await callTool("configure-canvas", { grid: true }));
+  });
+});
+
+describe("arrows between close elements", () => {
+  beforeEach(async () => {
+    await renderEditor();
+  });
+
+  const gapCase = async (gap: number) => {
+    const result = expectOk(
+      await callTool("add-elements", {
+        position: { x: 0, y: 0 },
+        elements: [
+          {
+            type: "rectangle",
+            id: "a",
+            x: 0,
+            y: 0,
+            width: 110,
+            height: 70,
+            label: "A",
+          },
+          {
+            type: "rectangle",
+            id: "b",
+            x: 110 + gap,
+            y: 0,
+            width: 110,
+            height: 70,
+            label: "B",
+          },
+          { type: "arrow", from: "a", to: "b" },
+        ],
+      }),
+    );
+    const [a, b, arrow] = result.created;
+    return { result, a, b, arrow, ends: arrowEnds(arrow.id) };
+  };
+
+  it.each([6, 12, 20])(
+    "draws a plain arrow between the edges at %ipx and says it isn't attached",
+    async (gap) => {
+      const { result, a, b, ends } = await gapCase(gap);
+      expect(result.warnings?.[0]).toContain("not attached");
+      expect(result.warnings[0]).toContain("32px");
+      // from the facing edge of A to the facing edge of B, not into B's middle
+      expect(ends.start.x).toBeCloseTo(a.x + a.width, 0);
+      expect(ends.end.x).toBeCloseTo(b.x, 0);
+      const stored = h.elements.find(
+        (e) => e.id === result.created[2].id,
+      ) as any;
+      expect(stored.startBinding).toBeNull();
+      expect(stored.endBinding).toBeNull();
+    },
+  );
+
+  it.each([40, 60, 120])(
+    "attaches the arrow at %ipx, ending on the outline",
+    async (gap) => {
+      const { result, a, b, ends } = await gapCase(gap);
+      expect(result.warnings).toBeUndefined();
+      expect(result.created[2]).toMatchObject({ from: a.id, to: b.id });
+      expect(ends.end.x).toBeLessThan(b.x + 1);
+      expect(ends.end.x).toBeGreaterThan(b.x - 12);
+    },
+  );
+
+  it("does the same for connect-elements", async () => {
+    const [a, b] = await addBoxes({ a: { x: 0, y: 0 }, b: { x: 115, y: 0 } });
+    const result = expectOk(
+      await callTool("connect-elements", { from: a.id, to: b.id }),
+    );
+    expect(result.warnings[0]).toContain("not attached");
+    const ends = arrowEnds(result.arrow.id);
+    expect(ends.end.x).toBeCloseTo(b.x, 0);
+  });
+
+  it("reports arrow start and end points", async () => {
+    const { arrow } = await gapCase(80);
+    expect(arrow.start).toEqual(expect.any(Array));
+    expect(arrow.end[0]).toBeGreaterThan(arrow.start[0]);
+  });
+
+  it("works for diamonds and ellipses too", async () => {
+    const result = expectOk(
+      await callTool("add-elements", {
+        position: { x: 0, y: 0 },
+        elements: [
+          { type: "diamond", id: "d", x: 0, y: 0, width: 140, height: 100 },
+          { type: "ellipse", id: "e", x: 160, y: 0, width: 140, height: 100 },
+          { type: "arrow", from: "d", to: "e" },
+        ],
+      }),
+    );
+    const ends = arrowEnds(result.created[2].id);
+    // the right vertex of the diamond, the left extreme of the ellipse
+    expect(ends.start.x).toBeCloseTo(result.created[0].x + 140, 0);
+    expect(ends.end.x).toBeCloseTo(result.created[1].x, 0);
+  });
+});
+
+describe("add-elements absolute placement and results", () => {
+  beforeEach(async () => {
+    await renderEditor();
+  });
+
+  it("puts elements at exactly the given scene coordinates with absolute", async () => {
+    const { created } = expectOk(
+      await callTool("add-elements", {
+        absolute: true,
+        position: { x: 9999, y: 9999 },
+        elements: [
+          { type: "rectangle", x: 412, y: 305, width: 100, height: 60 },
+        ],
+      }),
+    );
+    expect(created[0]).toMatchObject({ x: 412, y: 305 });
+  });
+
+  it("a partial add keeps absolute-looking coordinates in place with absolute", async () => {
+    await addBoxes({ a: { x: 0, y: 0 }, b: { x: 300, y: 0 } });
+    const { created } = expectOk(
+      await callTool("add-elements", {
+        absolute: true,
+        elements: [
+          {
+            type: "line",
+            x: 40,
+            y: 200,
+            points: [
+              [0, 0],
+              [250, 0],
+            ],
+          },
+        ],
+      }),
+    );
+    expect(created[0]).toMatchObject({ x: 40, y: 200 });
+  });
+
+  it("lists the id map before the created elements", async () => {
+    const result = expectOk(
+      await callTool("add-elements", {
+        elements: [{ type: "rectangle", id: "mine" }],
+      }),
+    );
+    const keys = Object.keys(result);
+    expect(keys.indexOf("ids")).toBeLessThan(keys.indexOf("created"));
+    expect(result.ids.mine).toBe(result.created[0].id);
+  });
+});
+
+describe("check-layout", () => {
+  beforeEach(async () => {
+    await renderEditor();
+  });
+
+  it("finds nothing wrong with a tidy diagram", async () => {
+    expectOk(
+      await callTool("create-diagram", {
+        nodes: [
+          { id: "a", label: "A" },
+          { id: "b", label: "B" },
+          { id: "c", label: "C" },
+        ],
+        edges: [
+          { from: "a", to: "b" },
+          { from: "a", to: "c" },
+        ],
+      }),
+    );
+    const result = expectOk(await callTool("check-layout"));
+    expect(result.problems).toBe(0);
+    expect(result.overlaps.total).toBe(0);
+  });
+
+  it("flags shapes that overlap, but not a shape inside another", async () => {
+    await callTool("add-elements", {
+      absolute: true,
+      elements: [
+        { type: "rectangle", id: "a", x: 0, y: 0, width: 200, height: 100 },
+        { type: "rectangle", id: "b", x: 150, y: 50, width: 200, height: 100 },
+        {
+          type: "rectangle",
+          id: "outer",
+          x: 600,
+          y: 0,
+          width: 300,
+          height: 200,
+        },
+        {
+          type: "rectangle",
+          id: "inner",
+          x: 650,
+          y: 50,
+          width: 100,
+          height: 60,
+        },
+      ],
+    });
+    const result = expectOk(await callTool("check-layout"));
+    expect(result.overlaps.total).toBe(1);
+    expect(result.overlaps.items[0].overlap).toBe("50x50");
+  });
+
+  it("flags unattached arrow ends inside a shape or hanging in the air", async () => {
+    await callTool("add-elements", {
+      absolute: true,
+      elements: [
+        { type: "rectangle", id: "a", x: 0, y: 0, width: 200, height: 100 },
+        {
+          type: "arrow",
+          x: -150,
+          y: 50,
+          points: [
+            [0, 0],
+            [250, 0],
+          ],
+        },
+        {
+          type: "arrow",
+          x: 500,
+          y: 500,
+          points: [
+            [0, 0],
+            [100, 0],
+          ],
+        },
+      ],
+    });
+    const result = expectOk(await callTool("check-layout"));
+    expect(result.arrowEndsInsideShape.items).toEqual([
+      expect.objectContaining({ end: "end" }),
+    ]);
+    // the second arrow has both ends in the air; the first has its start there
+    expect(result.looseArrowEnds.total).toBe(3);
+  });
+
+  it("flags attached arrows whose end snapped to the middle of the target", async () => {
+    const [a, b] = await addBoxes({ a: { x: 0, y: 0 }, b: { x: 300, y: 0 } });
+    const { arrow } = expectOk(
+      await callTool("connect-elements", { from: a.id, to: b.id }),
+    );
+    expect(
+      expectOk(await callTool("check-layout")).arrowEndsInsideTarget.total,
+    ).toBe(0);
+    // squash the gap by moving B next to A: the editor re-snaps the bound end
+    await callTool("update-elements", {
+      updates: [{ id: b.id, x: a.x + 115 }],
+    });
+    const after = expectOk(await callTool("check-layout"));
+    expect(
+      after.arrowEndsInsideTarget.items.every((i: any) => i.arrow === arrow.id),
+    ).toBe(true);
+  });
+
+  it("counts elements outside the visible area", async () => {
+    await callTool("add-elements", {
+      absolute: true,
+      reveal: false,
+      elements: [
+        { type: "rectangle", x: 0, y: 0, width: 100, height: 60 },
+        { type: "rectangle", x: 90000, y: 90000, width: 100, height: 60 },
+      ],
+    });
+    const result = expectOk(await callTool("check-layout"));
+    expect(result.offscreen.total).toBeGreaterThanOrEqual(1);
+    expect(result.offscreen.note).toContain("focus-viewport");
   });
 });
