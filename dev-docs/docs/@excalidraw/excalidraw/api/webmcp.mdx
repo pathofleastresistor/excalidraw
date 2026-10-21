@@ -85,4 +85,4 @@ Positions are in scene units (x grows to the right, y downward), angles in degre
 - **The user comes first.** While the user is typing in a shape, drawing or dragging, tools that change the canvas return a `busy` error to retry shortly. Unknown parameter names are an error rather than silently ignored, and numbers are limited to ±10,000,000.
 - **Frames.** Moving or resizing an element so that it no longer overlaps its frame takes it out of the frame. To put elements into a frame use `wrap-in-frame`, or `children` in `add-elements`.
 - **Output size.** Lists are paged (25 by default) and text is truncated, but `capture-image` returns a whole image, so call it when you need to see the result rather than after every step.
-- **excalidraw.com** turns the tools off while collaborating in a live room, as collaborators' content would reach the agent and the agent's edits would reach them.
+- **excalidraw.com** turns the tools off while collaborating in a live room, as collaborators' content would reach the agent and the agent's edits would reach them. A build can keep them on by setting `VITE_APP_ENABLE_WEBMCP_IN_COLLAB=true`.

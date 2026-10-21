@@ -59,3 +59,11 @@ export const COOKIES = {
 export const isExcalidrawPlusSignedUser = document.cookie.includes(
   COOKIES.AUTH_STATE_COOKIE,
 );
+
+/**
+ * Keep the WebMCP tools registered during live collaboration. Off by default:
+ * collaborators' content would reach the user's agent, and the agent's edits
+ * would reach them. Set `VITE_APP_ENABLE_WEBMCP_IN_COLLAB=true` at build time.
+ */
+export const ENABLE_WEBMCP_IN_COLLAB =
+  import.meta.env.VITE_APP_ENABLE_WEBMCP_IN_COLLAB === "true";

@@ -19,7 +19,7 @@ Opt-in. With `<Excalidraw webMCP />` the editor registers tools through [WebMCP]
 
 - `webMCP?: boolean | WebMCPOptions` where `WebMCPOptions` is `{ exposedTo?: string[]; readOnly?: boolean }`. Off by default, and a no-op in browsers without WebMCP.
 - Tools change the canvas through the editor's own operations (one undo step each), respect view mode and `UIOptions.canvasActions`, return errors as `{ ok: false, error }` data, and accept an optional `expectedSceneVersion` to refuse edits based on a stale read.
-- The `excalidraw-app` enables it.
+- The `excalidraw-app` enables it, except during live collaboration unless built with `VITE_APP_ENABLE_WEBMCP_IN_COLLAB=true`.
 - See [WebMCP](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/webmcp).
 
 ### Export API: `exportScene` (2026-10-18) [#12347](https://github.com/excalidraw/excalidraw/pull/12347)

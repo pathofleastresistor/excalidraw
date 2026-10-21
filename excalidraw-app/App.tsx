@@ -92,6 +92,7 @@ import {
   isExcalidrawPlusSignedUser,
   STORAGE_KEYS,
   SYNC_BROWSER_TABS_TIMEOUT,
+  ENABLE_WEBMCP_IN_COLLAB,
 } from "./app_constants";
 import Collab, {
   collabAPIAtom,
@@ -946,9 +947,10 @@ const ExcalidrawWrapper = () => {
       })}
     >
       <Excalidraw
-        // not in live collaboration rooms: collaborators' content would reach
-        // the user's agent, and the agent's edits would reach them
-        webMCP={!isCollaborating}
+        // off in live collaboration rooms unless opted in at build time:
+        // collaborators' content would reach the user's agent, and the
+        // agent's edits would reach them
+        webMCP={!isCollaborating || ENABLE_WEBMCP_IN_COLLAB}
         viewportStatusFrame={viewportStatusFrame}
         userToFollow={userToFollow}
         onChange={onChange}

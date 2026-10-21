@@ -31,6 +31,7 @@ interface ImportMetaEnv {
 
   // Enable PWA in dev server
   VITE_APP_ENABLE_PWA: string;
+  VITE_APP_ENABLE_WEBMCP_IN_COLLAB: string;
 
   VITE_APP_PLUS_LP: string;
 
