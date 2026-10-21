@@ -958,6 +958,23 @@ describe("connect-elements", () => {
     expect(element.points.length).toBeGreaterThan(2);
   });
 
+  it("leaves an elbow arrow sideways between boxes that are side by side", async () => {
+    // far apart diagonally: the flowchart convention is to go out of the side
+    const [a, b] = await addBoxes({ a: { x: 0, y: 600 }, b: { x: 400, y: 0 } });
+    const { arrow } = expectOk(
+      await callTool("connect-elements", {
+        from: a.id,
+        to: b.id,
+        arrowKind: "elbow",
+      }),
+    );
+    const points = (h.elements.find((e) => e.id === arrow.id) as any).points;
+    // the first segment runs along x (same y as the start)
+    expect(points[1][1]).toBe(0);
+    expect(points[1][0]).toBeGreaterThan(0);
+    expectArrowBetween(arrow.id, a.id, b.id);
+  });
+
   it("explains what can't be connected", async () => {
     const [a] = await addBoxes({ a: { x: 0, y: 0 } });
     await callTool("add-elements", {

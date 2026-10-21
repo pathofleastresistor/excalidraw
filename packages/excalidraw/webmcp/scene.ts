@@ -190,7 +190,13 @@ export const getConnectorGeometry = (
   let start = fromCenter;
   let end = toCenter;
   if (isElbowArrow(arrow)) {
-    if (Math.abs(dx) >= Math.abs(dy)) {
+    // leave sideways when the elements are clearly side by side (a gap
+    // between them on the x axis), as flowcharts do, else by the larger offset
+    const sideGap = Math.max(
+      to.x - (from.x + from.width),
+      from.x - (to.x + to.width),
+    );
+    if (sideGap > 24 || Math.abs(dx) >= Math.abs(dy)) {
       start = { x: dx >= 0 ? from.x + from.width : from.x, y: fromCenter.y };
       end = { x: dx >= 0 ? to.x : to.x + to.width, y: toCenter.y };
     } else {
